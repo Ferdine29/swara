@@ -349,18 +349,23 @@ function updateModel(dt){
   if (S.mode==="sim"){
     const a = S.gas ? 4.2*(1-S.target/(S.vmax*1.03)) : (S.brake ? -9 : -1.4);
     S.target = Math.max(0, Math.min(S.vmax, S.target + a*3.6*dt));
-  } else if (S.lastFix && performance.now()-S.lastFix > 6000) {
-    S.target = Math.max(0, S.target - 3*dt);          // GPS lost: coast down gently
+  } else {
+    fuseStep(dt);
+    if (M.ok) S.target = M.vEst*3.6 < 2.5 ? 0 : Math.min(M.vEst*3.6, 330);
+    if (S.lastFix && performance.now()-S.lastFix > 6000) {
+      S.target = Math.max(0, S.target - 3*dt); M.vEst = S.target/3.6;   // GPS lost: coast down gently
+    }
   }
-  // smooth GPS steps into continuous motion
-  const prev = S.speed;
-  const maxUp = 14*dt, maxDn = 30*dt;                  // km/h per step
-  S.speed += Math.max(-maxDn, Math.min(maxUp, (S.target - S.speed)*Math.min(1,dt*2.2)));
+  // smooth speed into continuous motion (fast when the motion sensor leads)
+  const prev = S.speed, fast = S.mode==="sim" || M.ok;
+  const maxUp = (fast?45:22)*dt, maxDn = 45*dt;        // km/h per step
+  S.speed += Math.max(-maxDn, Math.min(maxUp, (S.target - S.speed)*Math.min(1,dt*(fast?9:4))));
   const acc = (S.speed - prev)/3.6/Math.max(dt,1e-3); // m/s²
-  S.accel += (acc - S.accel)*Math.min(1,dt*4);
-  let load = S.mode==="sim" ? (S.gas?1:0) : Math.max(0,Math.min(1, 0.25 + S.accel/2.2));
+  S.accel += (acc - S.accel)*Math.min(1,dt*8);
+  const aNow = M.ok ? M.aFwd : S.accel;                // the sensor feels throttle before speed changes
+  let load = S.mode==="sim" ? (S.gas?1:0) : Math.max(0,Math.min(1, 0.25 + aNow/2.0));
   if (S.speed < 2) load = Math.max(load,0.15);
-  S.load += (load - S.load)*Math.min(1,dt*5);
+  S.load += (load - S.load)*Math.min(1,dt*10);
 
   // gear selection
   const upFrac = S.style==="sport" ? (0.55 + 0.37*S.load) : (0.42 + 0.2*S.load);
@@ -383,7 +388,7 @@ function updateModel(dt){
   }
   if (S.starting>0){ S.starting -= dt; target = S.starting>0.5 ? e.idle*0.35 : e.idle*1.7; }
   target = Math.min(target, e.red*1.01);
-  const k = S.shiftT>0 ? 9 : 6;
+  const k = S.shiftT>0 ? 12 : 10;
   S.rpm += (target - S.rpm)*Math.min(1,dt*k);
   if (S.shiftT>0) S.shiftT -= dt;
   // what to do when the bike is standing still
@@ -455,10 +460,64 @@ function onFix(p){
   lastPos = p;
   if (v!==null && !isNaN(v)){
     let kmh = v*3.6; if (kmh < 2.5) kmh = 0;            // ignore GPS drift when parked
-    S.target = Math.min(kmh, 330);
+    if (!M.ok) S.target = Math.min(kmh, 330);
+    fuseFix(v, now);
   }
   S.lastFix = now; S.gpsOk = true;
-  setStatus("GPS aktif · akurasi "+Math.round(p.coords.accuracy)+" m","on");
+  setStatus((M.ok ? "GPS + sensor gerak" : M.on ? "GPS aktif · sensor gerak kalibrasi" : "GPS aktif")+" · akurasi "+Math.round(p.coords.accuracy)+" m","on");
+}
+// ---------- Motion sensor fusion ----------
+// GPS speed arrives ~1x per second and lags. The accelerometer feels throttle instantly.
+// We learn which phone axis points forward by matching accelerometer readings with GPS speed changes,
+// then integrate forward acceleration between GPS fixes and let each fix pull the estimate back.
+const M = {on:false, ok:false, aF:[0,0,0], g:null, sum:[0,0,0], n:0, acc:[0,0,0], dir:[0,0,0], aFwd:0, vEst:0, gpsV:null, gpsT:0, hits:0, hist:[], bad:0};
+const GPS_LAG = 0.7;                                    // seconds a phone's GPS speed typically trails reality
+(()=>{ try{ const d=JSON.parse(store.get("motionDir")||"null");
+  if (Array.isArray(d) && d.length===3){ M.dir=d; M.acc=d.map(q=>q*4); M.hits=4; M.ok=true; } }catch(_){} })();
+function onMotion(e){
+  let x,y,z; const a=e.acceleration;
+  if (a && a.x!=null){ x=a.x; y=a.y; z=a.z; }
+  else { const g=e.accelerationIncludingGravity; if(!g||g.x==null) return;
+    if(!M.g) M.g=[g.x,g.y,g.z]; M.g[0]+=(g.x-M.g[0])*0.02; M.g[1]+=(g.y-M.g[1])*0.02; M.g[2]+=(g.z-M.g[2])*0.02;
+    x=g.x-M.g[0]; y=g.y-M.g[1]; z=g.z-M.g[2]; }
+  M.on = true;
+  const k = 0.12;                                       // ~1.5 Hz low-pass removes engine/road vibration
+  M.aF[0]+=(x-M.aF[0])*k; M.aF[1]+=(y-M.aF[1])*k; M.aF[2]+=(z-M.aF[2])*k;
+  M.sum[0]+=M.aF[0]; M.sum[1]+=M.aF[1]; M.sum[2]+=M.aF[2]; M.n++;
+  M.aFwd = M.ok ? M.aF[0]*M.dir[0]+M.aF[1]*M.dir[1]+M.aF[2]*M.dir[2] : 0;
+}
+function fuseFix(v, now){
+  if (M.gpsV!==null && M.n>10){
+    const dt=(now-M.gpsT)/1000;
+    if (dt>0.4 && dt<3){
+      const ga=(v-M.gpsV)/dt, avg=M.sum.map(q=>q/M.n);
+      if (Math.abs(ga)>0.35){
+        for (let i=0;i<3;i++) M.acc[i]+=avg[i]*Math.sign(ga);
+        const len=Math.hypot(...M.acc)||1; const nd=M.acc.map(q=>q/len);
+        const agree = nd[0]*M.dir[0]+nd[1]*M.dir[1]+nd[2]*M.dir[2];
+        // phone moved in its holder? the new reading points elsewhere: relearn from scratch
+        const one=Math.hypot(...avg)||1, single=(avg[0]*M.dir[0]+avg[1]*M.dir[1]+avg[2]*M.dir[2])/one*Math.sign(ga);
+        if (M.ok && single < -0.3){ if (++M.bad>=3){ M.ok=false; M.hits=0; M.acc=[0,0,0]; M.bad=0; store.set("motionDir",""); } }
+        else M.bad=0;
+        M.dir=nd; M.hits++;
+        if (M.hits>=4 && (M.ok || agree>0.8)){ M.ok=true; store.set("motionDir", JSON.stringify(M.dir.map(q=>+q.toFixed(4)))); }
+      }
+    }
+  }
+  M.sum=[0,0,0]; M.n=0; M.gpsV=v; M.gpsT=now;
+  if (!M.ok) { M.vEst = v; return; }
+  // compare GPS with what we estimated GPS_LAG seconds ago, and shift today's estimate by that error
+  let past = M.vEst; for (const h of M.hist) if (now - h[0] >= GPS_LAG*1000) { past = h[1]; break; }
+  M.vEst = Math.max(0, M.vEst + 0.5*(v - past));
+}
+function fuseStep(dt){
+  if (!M.ok) return;
+  M.vEst = Math.max(0, M.vEst + M.aFwd*dt);
+  const now = performance.now(); M.hist.unshift([now, M.vEst]); if (M.hist.length > 120) M.hist.pop();
+  if (M.gpsV!==null && M.gpsV<0.7 && Math.abs(M.aFwd)<0.4) M.vEst *= Math.max(0,1-dt*3);   // parked: stop drift
+}
+function startMotion(){
+  try{ window.addEventListener("devicemotion", onMotion); }catch(_){}
 }
 function haversine(a,b){
   const R=6371000, toR=x=>x*Math.PI/180;
@@ -498,6 +557,8 @@ function setStyle(s){ S.style=s; store.set("style",s);
 let wake=null;
 async function toggleEngine(){
   if (!S.running){
+    try{ if (typeof DeviceMotionEvent!=="undefined" && DeviceMotionEvent.requestPermission) await DeviceMotionEvent.requestPermission(); }catch(_){}
+    startMotion();
     try{ if(!A) buildAudio(); await A.ctx.resume(); }catch(e){ setStatus("Audio tidak bisa diputar di perangkat ini","warn"); return; }
     S.running=true; S.rpm=0; S.starting=1.1; if (S.chime) chime();
     $("startBtn").textContent="Matikan mesin"; $("startBtn").classList.add("running");

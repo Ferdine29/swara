@@ -23,7 +23,7 @@ Aplikasi ini berbentuk PWA (Progressive Web App): satu kode untuk Android dan iP
 3. Izinkan akses lokasi saat diminta.
 4. Pasang HP di holder dengan layar tetap menyala. Aplikasi meminta layar tidak mati otomatis, tetapi jangan kunci layar karena browser menghentikan suara saat layar terkunci.
 
-Catatan: GPS HP diperbarui sekitar sekali per detik, jadi aplikasi menghaluskan perubahan kecepatan. Speaker Bluetooth juga punya jeda sekitar 0,1 sampai 0,3 detik. Keduanya normal.
+Catatan jeda suara: GPS HP hanya diperbarui sekitar sekali per detik dan sedikit terlambat. Karena itu Swara juga memakai sensor gerak HP, yang langsung merasakan saat motor digas atau direm. Saat pertama kali dipakai, Swara mempelajari arah depan HP di holder selama beberapa kali motor menambah kecepatan, lalu menyimpannya. Setelah itu jeda dari gas ke suara sekitar 0,2 sampai 0,3 detik, ditambah jeda Bluetooth 0,15 sampai 0,3 detik. Kalau posisi HP di holder diubah, Swara akan mempelajarinya ulang secara otomatis.
 
 ## Memasang ke layar utama
 
