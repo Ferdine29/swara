@@ -1,6 +1,6 @@
 {
-  "name": "Raung Listrik",
-  "short_name": "Raung",
+  "name": "Swara",
+  "short_name": "Swara",
   "description": "Suara mesin motor sintetis untuk motor listrik, mengikuti kecepatan GPS.",
   "start_url": "./",
   "scope": "./",

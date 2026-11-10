@@ -1,4 +1,4 @@
-# Raung Listrik
+# Swara
 
 Aplikasi suara mesin untuk motor listrik. Aplikasi membaca kecepatan dari GPS HP, mengubahnya menjadi putaran mesin (RPM) dan gigi virtual 1 sampai 6, lalu membuat suara mesin motor besar secara sintetis. Suara diputar lewat speaker Bluetooth motor, misalnya speaker dual-channel bawaan Omoway Omo X.
 
@@ -32,7 +32,7 @@ Catatan: GPS HP diperbarui sekitar sekali per detik, jadi aplikasi menghaluskan 
 
 1. Di repositori ini buka **Settings → Pages**.
 2. Pada **Build and deployment**, pilih **Deploy from a branch**, branch `main`, folder `/ (root)`, lalu **Save**.
-3. Setelah 1 sampai 2 menit, aplikasi bisa dibuka di `https://<username>.github.io/raung-listrik/`.
+3. Setelah 1 sampai 2 menit, aplikasi bisa dibuka di `https://<username>.github.io/swara/`.
 
 GPS di browser hanya jalan lewat HTTPS, dan GitHub Pages sudah HTTPS.
 

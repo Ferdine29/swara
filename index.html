@@ -7,14 +7,14 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Raung">
+<meta name="apple-mobile-web-app-title" content="Swara">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
 </head>
 <body>
-<title>Raung Listrik</title>
+<title>Swara</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
@@ -81,7 +81,7 @@ h2{font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.14e
 
 <div class="wrap">
   <header>
-    <h1>Raung <span>Listrik</span></h1>
+    <h1>Swa<span>ra</span></h1>
     <div class="status" id="status"><i class="dot" id="dot"></i><span id="statusText">Mesin mati</span></div>
   </header>
 
@@ -198,8 +198,8 @@ const S = {
 const SLIDERS=["vol","deep","pops","idlev","pitch","rough","vmax"];
 const conv=(k,v)=> k==="vmax"?v : k==="pitch"?v : v/100;
 const store = {
-  get(k){try{return localStorage.getItem("raung."+k)}catch(e){return null}},
-  set(k,v){try{localStorage.setItem("raung."+k,v)}catch(e){}}
+  get(k){try{return localStorage.getItem("swara."+k)}catch(e){return null}},
+  set(k,v){try{localStorage.setItem("swara."+k,v)}catch(e){}}
 };
 (()=>{const id=store.get("eng");const e=ENGINES.find(x=>x.id===id);if(e)S.eng=e;
   for(const k of SLIDERS){const v=store.get(k);if(v!==null&&!isNaN(+v)){S[k]=conv(k,+v);$(k).value=v;$(k+"O").textContent=v;}}
