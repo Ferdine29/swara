@@ -8,7 +8,7 @@ Aplikasi ini berbentuk PWA (Progressive Web App): satu kode untuk Android dan iP
 
 - 17 pilihan suara mesin: Inline-4 Supersport 600cc (lengkingan tinggi), Big Twin 2100cc, V-Twin 1800cc, L-Twin 1300cc, V-Twin 1350cc, Inline-4 1000cc (biasa, crossplane, supercharged), Inline-4 1400cc, V4 1100cc dan 1300cc, Triple 900cc dan 2500cc, Boxer 1300cc, Flat-6 1830cc, Inline-6 1650cc, dan V8 5700cc.
 - Semua suara dibuat secara sintetis dari urutan pengapian tiap jenis mesin. Tidak memakai rekaman atau merek pabrikan mana pun.
-- Pengaturan suara: volume, bass, nada, kekasaran, dan letupan knalpot saat gas dilepas.
+- Pengaturan suara: volume, penguat (agar lebih keras di speaker kecil), bass, nada, kekasaran, dan letupan knalpot saat gas dilepas.
 - Saat berhenti: langsam terus, langsam 10 detik lalu senyap, atau senyap. Volume langsam bisa diatur.
 - Gaya perpindahan gigi: Santai atau Sport.
 - Kecepatan maksimal motor bisa diatur. Bawaannya 113 km/j sesuai Omoway Omo X.

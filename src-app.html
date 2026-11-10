@@ -101,7 +101,8 @@ h2{font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.14e
 
   <h2>Suara</h2>
   <div class="sliders">
-    <div class="sl"><label for="vol">Volume</label><input id="vol" type="range" min="0" max="100" value="80"><output id="volO">80</output></div>
+    <div class="sl"><label for="vol">Volume</label><input id="vol" type="range" min="0" max="100" value="100"><output id="volO">100</output></div>
+    <div class="sl"><label for="boost">Penguat</label><input id="boost" type="range" min="0" max="100" value="60"><output id="boostO">60</output></div>
     <div class="sl"><label for="deep">Bass</label><input id="deep" type="range" min="0" max="100" value="50"><output id="deepO">50</output></div>
     <div class="sl"><label for="pitch">Nada</label><input id="pitch" type="range" min="-50" max="50" value="0"><output id="pitchO">0</output></div>
     <div class="sl"><label for="rough">Kekasaran</label><input id="rough" type="range" min="0" max="100" value="50"><output id="roughO">50</output></div>
@@ -115,7 +116,7 @@ h2{font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.14e
       <button id="idleAuto" aria-pressed="false">Langsam 10 dtk</button>
       <button id="idleOff" aria-pressed="false">Senyap</button>
     </div>
-    <div class="sl"><label for="idlev">Volume langsam</label><input id="idlev" type="range" min="0" max="100" value="60"><output id="idlevO">60</output></div>
+    <div class="sl"><label for="idlev">Volume langsam</label><input id="idlev" type="range" min="0" max="100" value="85"><output id="idlevO">85</output></div>
   </div>
 
   <h2>Motor saya</h2>
@@ -179,9 +180,9 @@ const S = {
   eng: ENGINES.find(e=>e.id==="i4"), running:false, mode:"gps", style:"calm",
   target:0, speed:0, accel:0, load:0.2, rpm:0, rpmDisp:0, gear:0, shiftT:0,
   gas:false, brake:false, gpsOk:false, lastFix:null, starting:0,
-  vol:0.8, deep:0.5, pops:0.4, idlev:0.6, pitch:0, rough:0.5, vmax:113, idleMode:"idle", stopT:0, idleF:1,
+  vol:1, deep:0.5, pops:0.4, idlev:0.85, boost:0.6, pitch:0, rough:0.5, vmax:113, idleMode:"idle", stopT:0, idleF:1,
 };
-const SLIDERS=["vol","deep","pops","idlev","pitch","rough","vmax"];
+const SLIDERS=["vol","boost","deep","pops","idlev","pitch","rough","vmax"];
 const conv=(k,v)=> k==="vmax"?v : k==="pitch"?v : v/100;
 const store = {
   get(k){try{return localStorage.getItem("swara."+k)}catch(e){return null}},
@@ -235,12 +236,23 @@ function buildAudio(){
   const Ctx = window.AudioContext || window.webkitAudioContext;
   const ctx = new Ctx({latencyHint:"interactive"});
   const master = ctx.createGain(); master.gain.value = 0;
-  const comp = ctx.createDynamicsCompressor(); comp.threshold.value=-14; comp.ratio.value=4;
-  master.connect(comp); comp.connect(ctx.destination);
+  // Output chain tuned for small scooter speakers: cut sub-bass they cannot play,
+  // lift the mids where they are loud, then compress and limit for maximum loudness.
+  const filt = (type,f,q,g)=>{const b=ctx.createBiquadFilter();b.type=type;b.frequency.value=f;b.Q.value=q;if(g!==undefined)b.gain.value=g;return b;};
+  const hp1=filt("highpass",130,0.7), hp2=filt("highpass",130,0.7);
+  const mid=filt("peaking",650,0.8,9), pres=filt("peaking",2200,1,5);
+  const comp = ctx.createDynamicsCompressor(); comp.threshold.value=-24; comp.ratio.value=5; comp.knee.value=8; comp.attack.value=0.004; comp.release.value=0.2;
+  const boost = ctx.createGain(); boost.gain.value = 1 + S.boost*3;
+  const lim = ctx.createDynamicsCompressor(); lim.threshold.value=-1.5; lim.ratio.value=20; lim.knee.value=0; lim.attack.value=0.001; lim.release.value=0.08;
+  master.connect(hp1); hp1.connect(hp2); hp2.connect(mid); mid.connect(pres); pres.connect(comp); comp.connect(boost); boost.connect(lim);
+  const clip = ctx.createWaveShaper(); const cc=new Float32Array(2048);
+  for(let i=0;i<2048;i++){const x=i*2/2048-1; cc[i]=0.97*Math.tanh(1.5*x)/Math.tanh(1.5);} clip.curve=cc;   // final safety: never exceed full scale
+  lim.connect(clip); clip.connect(ctx.destination);
   const bass = ctx.createBiquadFilter(); bass.type="lowshelf"; bass.frequency.value=140;
   const lp = ctx.createBiquadFilter(); lp.type="lowpass"; lp.Q.value=0.9;
   const body = ctx.createBiquadFilter(); body.type="peaking"; body.Q.value=1.2; body.gain.value=5;
   const shaper = ctx.createWaveShaper(); shaper.oversample="2x";
+  const drive = ctx.createGain(); drive.gain.value = 3; drive.connect(shaper);
   const engGain = ctx.createGain(); engGain.gain.value=0;
   shaper.connect(body); body.connect(lp); lp.connect(bass); bass.connect(engGain); engGain.connect(master);
   // intake / mechanical noise
@@ -252,7 +264,7 @@ function buildAudio(){
   const wf = ctx.createBiquadFilter(); wf.type="highpass"; wf.frequency.value=900;
   wosc.connect(wf); wf.connect(wgain); wgain.connect(master); wosc.start();
   const popBuf = makeNoise(ctx,0.08);
-  A = {ctx, master, lp, body, bass, shaper, engGain, nbp, ngain, wosc, wgain, popBuf, src:null, eng:null, nextPop:0};
+  A = {ctx, master, boost, drive, hp1, hp2, lp, body, bass, shaper, engGain, nbp, ngain, wosc, wgain, popBuf, src:null, eng:null, nextPop:0};
   setEngineAudio(S.eng);
 }
 function setEngineAudio(e){
@@ -260,7 +272,7 @@ function setEngineAudio(e){
   const {ctx} = A;
   const src = ctx.createBufferSource(); src.buffer = makeCycleBuffer(ctx,e); src.loop = true;
   src.playbackRate.value = Math.max(0.05,(S.rpm||e.idle)/e.ref);
-  const g = ctx.createGain(); g.gain.value = 0; src.connect(g); g.connect(A.shaper); src.start();
+  const g = ctx.createGain(); g.gain.value = 0; src.connect(g); g.connect(A.drive); src.start();
   g.gain.setTargetAtTime(1, ctx.currentTime, 0.05);
   if (A.src){ const old=A.src; old.g.gain.setTargetAtTime(0,ctx.currentTime,0.05); setTimeout(()=>{try{old.s.stop()}catch(_){}} ,400); }
   A.src = {s:src,g}; A.eng = e;
@@ -343,7 +355,10 @@ function updateAudio(dt){
   const gain = (0.38 + 0.42*S.load + 0.2*rn) * cut;
   A.engGain.gain.setTargetAtTime(gain, t, tc);
   A.master.gain.setTargetAtTime(S.running ? S.vol*S.idleF : 0, t, 0.08);
-  A.lp.frequency.setTargetAtTime(500 + rn*3800 + S.load*2600, t, tc);
+  A.lp.frequency.setTargetAtTime(1200 + rn*4000 + S.load*3000, t, tc);
+  A.boost.gain.setTargetAtTime(1 + S.boost*3, t, 0.1);
+  const hpf = 170 - S.deep*110;                       // more Bass = let lower notes through
+  A.hp1.frequency.setTargetAtTime(hpf, t, 0.1); A.hp2.frequency.setTargetAtTime(hpf, t, 0.1);
   A.bass.gain.setTargetAtTime(-4 + S.deep*16, t, 0.1);
   A.nbp.frequency.setTargetAtTime(600 + rn*3200, t, tc);
   A.ngain.gain.setTargetAtTime((0.015 + 0.06*S.load*rn) * (0.5+S.deep*0.2), t, tc);
