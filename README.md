@@ -11,6 +11,8 @@ Aplikasi ini berbentuk PWA (Progressive Web App): satu kode untuk Android dan iP
 - Pengaturan suara: volume, penguat (agar lebih keras di speaker kecil), bass, nada, kekasaran, dan letupan knalpot saat gas dilepas.
 - Saat berhenti: langsam terus, langsam 10 detik lalu senyap, atau senyap. Volume langsam bisa diatur.
 - Gaya perpindahan gigi: Santai atau Sport.
+- Efek suara: klakson dua nada (tahan tombol), peringatan pejalan kaki di bawah 20 km/j, dan sapaan saat mesin dinyalakan.
+- Mode Pameran: sirene wail, yelp, dan hi-lo yang hanya bisa dibunyikan saat motor diam dan mati otomatis saat motor bergerak. Sirene di jalan raya dilarang untuk kendaraan pribadi (UU 22/2009 Pasal 59 dan 287 ayat 4).
 - Kecepatan maksimal motor bisa diatur. Bawaannya 113 km/j sesuai Omoway Omo X.
 - Mode simulasi untuk mencoba suara tanpa berkendara.
 

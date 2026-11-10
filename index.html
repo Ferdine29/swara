@@ -75,6 +75,14 @@ h2{font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.14e
 .eng b{font-family:var(--display);font-size:17px;font-weight:600}
 .eng .cc{font-family:var(--display);color:var(--amber);font-size:13px;letter-spacing:.06em}
 .eng small{color:var(--muted);font-size:12px}
+.horn{font-family:var(--display);font-weight:700;font-size:17px;letter-spacing:.08em;border-radius:12px;padding:16px;background:var(--line);border:1px solid var(--muted);
+  user-select:none;-webkit-user-select:none;touch-action:none}
+.horn.held{background:var(--fg);color:var(--bg)}
+.tg{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.tg div{display:grid;gap:2px;min-width:0}.tg small{color:var(--muted);font-size:12.5px}
+.pill{border-radius:999px;padding:7px 14px;font-size:13px;border:1px solid var(--line);background:none;color:var(--muted);flex:none}
+.pill[aria-pressed="true"]{background:var(--ok);border-color:var(--ok);color:#06140c;font-weight:600}
+.show .seg button[aria-pressed="true"]{background:var(--red);color:#fff}
 .note{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px;margin:0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -106,6 +114,8 @@ h2{font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.14e
       <button id="styleSport" aria-pressed="false">Sport</button>
     </div>
   </div>
+
+  <button class="horn" id="hornBtn">TAHAN UNTUK KLAKSON</button>
 
   <div id="simBox" hidden>
     <div class="sim">
@@ -139,6 +149,23 @@ h2{font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.14e
   <div class="sliders">
     <div class="sl"><label for="vmax">Kecepatan maks</label><input id="vmax" type="range" min="40" max="200" value="113"><output id="vmaxO">113</output></div>
     <p class="hint">Bawaan 113 km/j sesuai Omoway Omo X. Gigi virtual 1 sampai 6 dibagi di rentang ini, jadi mesin mencapai putaran tinggi di kecepatan motor Anda. Ubah kalau memakai motor lain.</p>
+  </div>
+
+  <h2>Efek suara</h2>
+  <div class="sliders">
+    <div class="tg"><div><b>Peringatan pejalan kaki</b><small>Dengung lembut di bawah 20 km/j agar orang sekitar sadar ada motor</small></div><button class="pill" id="avasTg" aria-pressed="true">Aktif</button></div>
+    <div class="tg"><div><b>Sapaan saat menyala</b><small>Nada singkat saat mesin dinyalakan</small></div><button class="pill" id="chimeTg" aria-pressed="true">Aktif</button></div>
+  </div>
+
+  <h2>Mode Pameran</h2>
+  <div class="sliders show">
+    <p class="hint">Sirene hanya untuk pameran, garasi, atau acara komunitas. Hanya bisa dibunyikan saat motor diam dan mati otomatis saat motor bergerak. Memakai sirene di jalan raya dilarang untuk kendaraan pribadi (UU 22/2009).</p>
+    <div class="seg" role="group" aria-label="Sirene">
+      <button id="sir-wail" aria-pressed="false">Wail</button>
+      <button id="sir-yelp" aria-pressed="false">Yelp</button>
+      <button id="sir-hilo" aria-pressed="false">Hi-Lo</button>
+    </div>
+    <p class="hint" id="sirenMsg" aria-live="polite">Ketuk sekali untuk membunyikan, ketuk lagi untuk mematikan.</p>
   </div>
 
   <h2>Pilih suara mesin</h2>
@@ -196,7 +223,7 @@ const S = {
   eng: ENGINES.find(e=>e.id==="i4"), running:false, mode:"gps", style:"calm",
   target:0, speed:0, accel:0, load:0.2, rpm:0, rpmDisp:0, gear:0, shiftT:0,
   gas:false, brake:false, gpsOk:false, lastFix:null, starting:0,
-  vol:1, deep:0.5, pops:0.4, idlev:0.85, boost:0.6, pitch:0, rough:0.5, vmax:113, idleMode:"idle", stopT:0, idleF:1,
+  vol:1, deep:0.5, pops:0.4, idlev:0.85, boost:0.6, pitch:0, rough:0.5, vmax:113, idleMode:"idle", stopT:0, idleF:1, avas:true, chime:true, horn:false, siren:null,
 };
 const SLIDERS=["vol","boost","deep","pops","idlev","pitch","rough","vmax"];
 const conv=(k,v)=> k==="vmax"?v : k==="pitch"?v : v/100;
@@ -207,7 +234,8 @@ const store = {
 (()=>{const id=store.get("eng");const e=ENGINES.find(x=>x.id===id);if(e)S.eng=e;
   for(const k of SLIDERS){const v=store.get(k);if(v!==null&&!isNaN(+v)){S[k]=conv(k,+v);$(k).value=v;$(k+"O").textContent=v;}}
   const st=store.get("style");if(st==="sport")S.style="sport";
-  const im=store.get("idleMode");if(["idle","silent","auto"].includes(im))S.idleMode=im;})();
+  const im=store.get("idleMode");if(["idle","silent","auto"].includes(im))S.idleMode=im;
+  for(const k of ["avas","chime"]){const v=store.get(k);if(v!==null)S[k]=v==="1";}})();
 function $(id){return document.getElementById(id)}
 
 // ---------- Audio ----------
@@ -280,7 +308,18 @@ function buildAudio(){
   const wf = ctx.createBiquadFilter(); wf.type="highpass"; wf.frequency.value=900;
   wosc.connect(wf); wf.connect(wgain); wgain.connect(master); wosc.start();
   const popBuf = makeNoise(ctx,0.08);
-  A = {ctx, master, boost, drive, hp1, hp2, lp, body, bass, shaper, engGain, nbp, ngain, wosc, wgain, popBuf, src:null, eng:null, nextPop:0};
+  // effects bus (horn, siren, pedestrian tone, chime): bypasses the engine idle/silent logic
+  const fx = ctx.createGain(); fx.gain.value = S.vol; fx.connect(hp1);
+  const mk = (type,f,dest)=>{const o=ctx.createOscillator();o.type=type;o.frequency.value=f;o.connect(dest);o.start();return o;};
+  const hornG = ctx.createGain(); hornG.gain.value=0; hornG.connect(fx);
+  mk("sawtooth",420,hornG); mk("sawtooth",525,hornG);
+  const sirG = ctx.createGain(); sirG.gain.value=0; sirG.connect(fx);
+  const sir1 = mk("sawtooth",700,sirG), sirS = ctx.createGain(); sirS.gain.value=0.25; sirS.connect(sirG);
+  const sir2 = mk("sine",1400,sirS);
+  const avasG = ctx.createGain(); avasG.gain.value=0; avasG.connect(fx);
+  const av1 = mk("sine",220,avasG), avS = ctx.createGain(); avS.gain.value=0.5; avS.connect(avasG); const av2 = mk("sine",330,avS);
+  A = {ctx, master, boost, drive, hp1, hp2, lp, body, bass, shaper, engGain, nbp, ngain, wosc, wgain, popBuf, src:null, eng:null, nextPop:0,
+       fx, hornG, sirG, sir1, sir2, avasG, av1, av2, t0: ctx.currentTime};
   setEngineAudio(S.eng);
 }
 function setEngineAudio(e){
@@ -296,6 +335,18 @@ function setEngineAudio(e){
   A.body.frequency.value = e.res[0]*1.4;
 }
 function applyRough(){ if(A&&A.eng) A.shaper.curve = shaperCurve(1 + A.eng.grit*8*(0.25+S.rough*1.5)); }
+function chime(){
+  if(!A) return; const t=A.ctx.currentTime+0.05;
+  [523.25,659.25,783.99,1046.5].forEach((f,i)=>{
+    const o=A.ctx.createOscillator(); o.type="sine"; o.frequency.value=f; const g=A.ctx.createGain(); const st=t+i*0.16, len=i<3?0.3:0.9;
+    g.gain.setValueAtTime(0,st); g.gain.linearRampToValueAtTime(0.5,st+0.01); g.gain.exponentialRampToValueAtTime(0.001,st+len);
+    o.connect(g); g.connect(A.fx); o.start(st); o.stop(st+len+0.05); });
+}
+function sirenFreq(mode, tt){
+  if(mode==="wail") return 600 + 750*(0.5-0.5*Math.cos(2*Math.PI*tt/3));
+  if(mode==="yelp") return 700 + 800*Math.pow((tt*4)%1,0.7);
+  return ((tt*1.6)%1) < 0.5 ? 960 : 770;
+}
 function pop(intensity){
   const {ctx} = A; const t = ctx.currentTime;
   const s = ctx.createBufferSource(); s.buffer = A.popBuf; s.playbackRate.value = 0.5+Math.random()*0.6;
@@ -380,6 +431,17 @@ function updateAudio(dt){
   A.ngain.gain.setTargetAtTime((0.015 + 0.06*S.load*rn) * (0.5+S.deep*0.2), t, tc);
   A.wosc.frequency.setTargetAtTime(S.rpm/60*9, t, tc);
   A.wgain.gain.setTargetAtTime(e.whine ? 0.05*e.whine*(0.2+0.8*S.load)*rn : 0, t, tc);
+  // effects
+  A.fx.gain.setTargetAtTime(S.running ? S.vol : 0, t, 0.05);
+  A.hornG.gain.setTargetAtTime(S.running && S.horn ? 0.35 : 0, t, 0.01);
+  if (S.siren && (!S.running || S.speed > 2)) stopSiren(true);
+  if (S.siren){ const f = sirenFreq(S.siren, t - A.t0); A.sir1.frequency.linearRampToValueAtTime(f, t+0.03); A.sir2.frequency.linearRampToValueAtTime(f*2.01, t+0.03); }
+  A.sirG.gain.setTargetAtTime(S.siren ? 0.4 : 0, t, 0.02);
+  const sp = S.speed, avOn = S.running && S.avas && sp > 0.5 && sp < 20;
+  const af = 220 + 180*Math.min(1, sp/20);
+  A.av1.frequency.setTargetAtTime(af, t, 0.1); A.av2.frequency.setTargetAtTime(af*1.5, t, 0.1);
+  const trem = 0.55 + 0.45*Math.pow(Math.sin(2*Math.PI*(6+6*sp/20)*(t-A.t0)),2);
+  A.avasG.gain.setTargetAtTime(avOn ? 0.3*trem*Math.min(1,(20-sp)/5) : 0, t, 0.02);
   // overrun pops: off-throttle, high-ish rpm, decelerating
   if (S.pops>0 && S.load<0.15 && rn>0.25 && S.speed>15){
     A.nextPop -= dt;
@@ -453,12 +515,12 @@ let wake=null;
 async function toggleEngine(){
   if (!S.running){
     try{ if(!A) buildAudio(); await A.ctx.resume(); }catch(e){ setStatus("Audio tidak bisa diputar di perangkat ini","warn"); return; }
-    S.running=true; S.rpm=0; S.starting=1.1;
+    S.running=true; S.rpm=0; S.starting=1.1; if (S.chime) chime();
     $("startBtn").textContent="Matikan mesin"; $("startBtn").classList.add("running");
     if (S.mode==="gps"){ setStatus("Mencari sinyal GPS…","warn"); startGps(); } else setStatus("Mode simulasi","on");
     try{ wake = await navigator.wakeLock?.request("screen"); }catch(_){}
   } else {
-    S.running=false; stopGps();
+    S.running=false; stopGps(); stopSiren(false);
     $("startBtn").textContent="Nyalakan mesin"; $("startBtn").classList.remove("running");
     setStatus("Mesin mati");
     try{ wake?.release(); }catch(_){} wake=null;
@@ -485,6 +547,22 @@ function setIdleMode(m){ S.idleMode=m; store.set("idleMode",m);
   for (const [id,v] of [["idleOn","idle"],["idleOff","silent"],["idleAuto","auto"]]) $(id).setAttribute("aria-pressed", String(v===m)); }
 $("idleOn").onclick=()=>setIdleMode("idle"); $("idleOff").onclick=()=>setIdleMode("silent"); $("idleAuto").onclick=()=>setIdleMode("auto");
 setIdleMode(S.idleMode);
+// ---------- Effects UI ----------
+function setToggle(k,v){ S[k]=v; store.set(k,v?"1":"0"); $(k+"Tg").setAttribute("aria-pressed",String(v)); $(k+"Tg").textContent=v?"Aktif":"Mati"; }
+$("avasTg").onclick=()=>setToggle("avas",!S.avas); $("chimeTg").onclick=()=>setToggle("chime",!S.chime);
+setToggle("avas",S.avas); setToggle("chime",S.chime);
+hold($("hornBtn"),"horn");
+function stopSiren(moved){
+  S.siren=null; for(const m of ["wail","yelp","hilo"]) $("sir-"+m).setAttribute("aria-pressed","false");
+  if (moved) $("sirenMsg").textContent="Sirene dimatikan otomatis karena motor bergerak.";
+}
+for (const m of ["wail","yelp","hilo"]) $("sir-"+m).onclick=()=>{
+  if (!S.running){ $("sirenMsg").textContent="Nyalakan mesin dulu."; return; }
+  if (S.speed > 2){ $("sirenMsg").textContent="Sirene hanya bisa dibunyikan saat motor diam."; return; }
+  if (S.siren===m){ stopSiren(false); $("sirenMsg").textContent="Sirene dimatikan."; return; }
+  stopSiren(false); S.siren=m; $("sir-"+m).setAttribute("aria-pressed","true");
+  $("sirenMsg").textContent="Sirene berbunyi. Akan mati otomatis jika motor bergerak.";
+};
 setStyle(S.style); renderEngines();
 
 // ---------- Tachometer ----------
